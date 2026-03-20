@@ -1,6 +1,6 @@
 import axiosInstance from './axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
 // ========================
 // AUTHENTICATION
@@ -135,5 +135,5 @@ export const progressAPI = {
 export const getFileURL = (path) => {
   if (!path) return '';
   if (path.startsWith('http')) return path;
-  return `http://localhost:5000${path}`;
+  return `http://localhost:5001${path}`;
 };
