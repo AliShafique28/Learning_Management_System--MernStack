@@ -117,7 +117,8 @@ export const certificateAPI = {
   getMyCertificates: () => axiosInstance.get('/certificates/my-certificates'),
   getById: (id) => axiosInstance.get(`/certificates/${id}`),
   verify: (certificateId) => axiosInstance.get(`/certificates/verify/${certificateId}`),
-  download: (id) => axiosInstance.get(`/certificates/${id}/download`),
+  // download: (id) => axiosInstance.get(`/certificates/${id}/download`),
+  download: (id) => axiosInstance.get(`/certificates/${id}/download`, { responseType: 'blob' }),
 };
 
 // ========================

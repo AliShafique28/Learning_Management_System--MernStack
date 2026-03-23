@@ -278,44 +278,70 @@ const updateVideoProgress = async (req, res) => {
     let certificateGenerated = false;
 
     if (realProgress >= 100) {
+      const certQuery = { student: req.user._id, course: lesson.course };
+      const placeholderUrl = '__GENERATING__';
+
       try {
-        const existingCertificate = await Certificate.findOne({
-          student: req.user._id,
-          course: lesson.course
-        });
+        const issuedAt = new Date();
+        const upsertedCertificate = await Certificate.findOneAndUpdate(
+          certQuery,
+          {
+            $setOnInsert: {
+              certificateId: uuidv4(),
+              issuedAt,
+              pdfUrl: ''
+            }
+          },
+          { upsert: true, new: true }
+        );
 
-        if (!existingCertificate) {
-          const [course, student] = await Promise.all([
-            Course.findById(lesson.course),
-            User.findById(req.user._id)
-          ]);
+        if (!upsertedCertificate) {
+          throw new Error('Certificate upsert failed');
+        }
 
-          if (course && student) {
-            const certificateId = uuidv4();
-            const pdfUrl = await generateCertificate(
-              student.name,
-              course.title,
-              certificateId,
-              new Date()
-            );
+        const alreadyHasPdf = !!(
+          upsertedCertificate.pdfUrl &&
+          upsertedCertificate.pdfUrl !== '' &&
+          upsertedCertificate.pdfUrl !== placeholderUrl
+        );
 
-            const certDoc = await Certificate.findOneAndUpdate(
-              { student: req.user._id, course: lesson.course },
-              {
-                $setOnInsert: {
-                  certificateId,
-                  pdfUrl,
-                  issuedAt: new Date()
-                }
-              },
-              { upsert: true, new: true, rawResult: true }
-            );
+        if (!alreadyHasPdf) {
+          const lockDoc = await Certificate.findOneAndUpdate(
+            { ...certQuery, pdfUrl: '' },
+            { $set: { pdfUrl: placeholderUrl } },
+            { new: true }
+          );
 
-            certificateGenerated = !!(
-              certDoc &&
-              certDoc.lastErrorObject &&
-              certDoc.lastErrorObject.upserted
-            );
+          if (lockDoc) {
+            let pdfUrl = '';
+            try {
+              const [course, student] = await Promise.all([
+                Course.findById(lesson.course),
+                User.findById(req.user._id)
+              ]);
+
+              if (course && student) {
+                pdfUrl = await generateCertificate(
+                  student.name,
+                  course.title,
+                  lockDoc.certificateId,
+                  lockDoc.issuedAt || issuedAt
+                );
+
+                await Certificate.updateOne(
+                  { _id: lockDoc._id },
+                  { $set: { pdfUrl } }
+                );
+
+                certificateGenerated = true;
+              }
+            } catch (pdfError) {
+              await Certificate.updateOne(
+                { _id: lockDoc._id },
+                { $set: { pdfUrl: '' } }
+              );
+              throw pdfError;
+            }
           }
         }
       } catch (certError) {
